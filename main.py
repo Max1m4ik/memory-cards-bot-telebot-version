@@ -48,12 +48,14 @@ def chek_text(message):
     
     elif stage == 'add1':
 
-        question_for_add = message.text
+        question_for_add = str(message.text)
+        bot.send_message(message.chat.id,question_for_add)
         bot.send_message(message.chat.id,"Ответ: ")
         stage = 'add2'
 
     elif stage == 'add2':
-        answer_for_add = message.text
+        answer_for_add = str(message.text)
+        bot.send_message(message.chat.id,answer_for_add)
         with sq.connect('cards.db') as con:
             cur = con.cursor()
             cur.execute(f"INSERT INTO cards VALUES (5, {question_for_add}, {answer_for_add})")
