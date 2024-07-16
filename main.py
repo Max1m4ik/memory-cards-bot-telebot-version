@@ -135,7 +135,7 @@ def chek_callback_data(callback):
             quest(i)
             answ(i)
             text += f"{i} - {question} - {answer}\n"
-        bot.send_message(text)
+        bot.send_message(callback.message.chat.id,  text)
 
         bot.send_message(callback.message.chat.id,"Номер карточки которую хотите удалить: ")
         stage = 'del'
