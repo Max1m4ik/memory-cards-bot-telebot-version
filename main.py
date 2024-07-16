@@ -28,6 +28,7 @@ def chek_text(message):
     global stage
     global question_for_add
     global answer_for_add
+    print(stage)
     if stage == 'chek':
         for i in range(1, col_of_q):
             quest(i)
@@ -56,10 +57,7 @@ def chek_text(message):
     elif stage == 'add2':
         answer_for_add = str(message.text)
         bot.send_message(message.chat.id,answer_for_add)
-        with sq.connect('cards.db') as con:
-            cur = con.cursor()
-            cur.execute(f"INSERT INTO cards VALUES (5, {question_for_add}, {answer_for_add})")
-            #cur.execute(f"INSERT INTO cards (answer) VALUES ({answer_for_add})")
+        add(question_for_add, answer_for_add)
         bot.send_message(message.chat.id,"Карточка успешно добавлена!")
         update()
         stage = 'null'
@@ -71,6 +69,16 @@ def chek_text(message):
             cur = con.cursor()
             cur.execute(f"DELETE FROM cards WHERE number = {number_question_for_del}")
         stage = 'null'
+
+#    elif stage == 'null':
+#        global my_message
+#        main_kb = types.InlineKeyboardMarkup()
+#        btn1 = types.InlineKeyboardButton(text="Проверить знания", callback_data="check")
+#        btn2 = types.InlineKeyboardButton(text="Редактировать каточки", callback_data="edit")
+#        main_kb.add(btn1)
+#        main_kb.add(btn2)
+#        my_message = bot.send_message(message.chat.id, "Привет, {0.first_name}!".format(message.from_user), reply_markup=main_kb)
+
     else:
         bot.send_message(message.chat.id,"Что-то пошло не так")
 
