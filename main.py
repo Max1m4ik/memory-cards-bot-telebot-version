@@ -28,15 +28,28 @@ def chek_text(message):
     global stage
     global question_for_add
     global answer_for_add
+    global answer
+    global correct
+    global col_of_q
     print(stage)
-    if stage == 'chek':
-        for i in range(1, col_of_q):
+    if stage == 'check':
+        quest(1)
+        answer = message.text
+        if answer == question:
+            bot.send_message(message.chat.id,"Правильно")
+            correct += 1
+        else:
+            bot.send_message(message.chat.id,"Не правильно")
+        with sq.connect('cards.db') as con:
+            cur = con.cursor()
+            cur.execute("""SELECT question FROM cards""")
+            questions = cur.fetchall()
+            unique_questions = [el for el, _ in groupby(questions)]
+            col_of_q = len(unique_questions)
+        for i in range(2, col_of_q+1):
             quest(i)
-            bot.send_message(message.chat.id, f"Карточка номер {i}: {question}")
+            bot.send_message(message.chat.id, f"Карточка номер {i}: {question[3:-4]}")
             bot.send_message(message.chat.id,"Ваш ответ: ")
-            global answer
-            global correct
-            correct = 0
             answer = message.text
             if answer == question:
                 bot.send_message(message.chat.id,"Правильно")
@@ -87,13 +100,20 @@ def chek_text(message):
 def chek_callback_data(callback):
     global stage
     global my_message
+    global question
+    global correct
     if callback.data == "check":
-        global stage
         bot.send_message(callback.message.chat.id,"Вы решили проверить знания")
         update()
-        global correct
         correct = 0
         stage = 'check'
+        with sq.connect('cards.db') as con:
+            cur = con.cursor()
+            cur.execute(f"""SELECT question FROM cards WHERE number = 1""")
+            question = cur.fetchall()
+        bot.send_message(callback.message.chat.id, f"Карточка номер 1: {question[3:-4]}")
+        bot.send_message(callback.message.chat.id, "Ваш ответ: ")
+
     elif callback.data == "edit":
         edit_menu = types.InlineKeyboardMarkup()
         btn1 = types.InlineKeyboardButton(text="Добавить карточки", callback_data="add")
