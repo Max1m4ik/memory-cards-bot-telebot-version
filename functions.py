@@ -23,7 +23,7 @@ def update():
 def add(question, answer):
     with sq.connect('cards.db') as con:
         cur = con.cursor()
-        cur.execute(f"""INSERT INTO cards VALUES ({col_of_q+1}, {question}, {answer})""")
+        cur.execute(f"""INSERT INTO cards (number, question, answer) VALUES (? , ? , ?)""", (col_of_q+1, question, answer))
 
 def quest(number):
     global question
@@ -31,11 +31,13 @@ def quest(number):
         cur = con.cursor()
         cur.execute(f"""SELECT question FROM cards WHERE number = {number}""")
         question = cur.fetchall()
+        question = str(question[0])[2:-3]
         print(question)
 
 def answ(number):
-    global answer
+    global r_answer
     with sq.connect('cards.db') as con:
         cur = con.cursor()
         cur.execute(f"""SELECT answer FROM cards WHERE number = {number}""")
-        answer = cur.fetchall()
+        r_answer = cur.fetchall()
+        r_answer = str(r_answer[0])[2:-3]

@@ -10,6 +10,7 @@ bot=telebot.TeleBot(TOKEN)
 correct = 0
 stage = 'null' 
 my_message = 1
+question_counter = 1
 
 def update():
     global col_of_q
@@ -36,7 +37,6 @@ def quest(number):
         cur.execute(f"""SELECT question FROM cards WHERE number = {number}""")
         question = cur.fetchall()
         question = str(question[0])[2:-3]
-        print(question)
 
 def answ(number):
     global r_answer
@@ -50,6 +50,7 @@ update()
 
 @bot.message_handler(commands=['start'])
 def start(message):
+    update()
     global my_message
     main_kb = types.InlineKeyboardMarkup()
     btn1 = types.InlineKeyboardButton(text="Проверить знания", callback_data="check")
@@ -67,9 +68,32 @@ def chek_text(message):
     global r_answer
     global correct
     global col_of_q
-    print(stage)
+    global question_counter
+    #print(stage)
     if stage == 'check':
-        answ(1)
+        answ(question_counter)
+        print (r_answer)
+        answer = message.text
+        if answer == r_answer:
+            bot.send_message(message.chat.id,"Правильно")
+            correct += 1
+        else:
+            bot.send_message(message.chat.id,"Не правильно")
+
+        question_counter += 1
+
+        update()
+    
+        if question_counter == col_of_q:    
+            bot.send_message(message.chat.id,f"Правильных ответов: {correct} из {col_of_q}, {correct / col_of_q * 100}% ")
+            stage = 'null'
+        else:
+            quest(question_counter)
+            bot.send_message(message.chat.id, f"Карточка номер {question_counter}: {question}")
+            bot.send_message(message.chat.id, "Ваш ответ: ")
+
+    elif stage == 'check 1':
+        answ(question_counter)
         answer = message.text
         if answer == r_answer:
             bot.send_message(message.chat.id,"Правильно")
@@ -77,25 +101,11 @@ def chek_text(message):
         else:
             bot.send_message(message.chat.id,"Не правильно")
         
-        update()
+        stage = 'check'
 
-        quest(i)
-        bot.send_message(message.chat.id, f"Карточка номер {i}: {question}")
-        bot.send_message(message.chat.id,"Ваш ответ: ")
-    
-        for i in range(2, col_of_q+1):
-            quest(i)
-            bot.send_message(message.chat.id, f"Карточка номер {i}: {question}")
-            bot.send_message(message.chat.id,"Ваш ответ: ")
-            answer = message.text
-            if answer == question:
-                bot.send_message(message.chat.id,"Правильно")
-                correct += 1
-            else:
-                bot.send_message(message.chat.id,"Не правильно")
-            
-        bot.send_message(message.chat.id,f"Правильных ответов: {correct} из {col_of_q}, {correct / col_of_q * 100}% ")
-        stage = 'null'
+        quest(question_counter)
+        bot.send_message(message.chat.id, f"Карточка номер {question_counter}: {question}")
+        bot.send_message(message.chat.id, "Ваш ответ: ")
     
     elif stage == 'add1':
 
@@ -119,6 +129,8 @@ def chek_text(message):
             cur = con.cursor()
             cur.execute(f"DELETE FROM cards WHERE number = {number_question_for_del}")
         stage = 'null'
+        update()
+        bot.send_message(message.chat.id,"Карточка успешно удалена!")
 
 #    elif stage == 'null':
 #        global my_message
@@ -139,15 +151,16 @@ def chek_callback_data(callback):
     global my_message
     global question
     global correct
+    global question_counter
     if callback.data == "check":
         bot.send_message(callback.message.chat.id,"Вы решили проверить знания")
-        update()
-        correct = 0
-        stage = 'check'
         quest(1)
         bot.send_message(callback.message.chat.id, f"Карточка номер 1: {question}")
-        print(question)
         bot.send_message(callback.message.chat.id, "Ваш ответ: ")
+        update()
+        correct = 0
+        question_counter = 2
+        stage = 'check 1'
 
     elif callback.data == "edit":
         edit_menu = types.InlineKeyboardMarkup()
@@ -166,10 +179,10 @@ def chek_callback_data(callback):
         bot.send_message(callback.message.chat.id,"Вы решили удалить карточки")
         update()
         text = "" 
-        for i in range (1, col_of_q):
+        for i in range (1, col_of_q+1):
             quest(i)
             answ(i)
-            text += f"{i} - {question} - {answer}\n"
+            text += f"{i} - {question} / {r_answer}\n"
         bot.send_message(callback.message.chat.id,  text)
 
         bot.send_message(callback.message.chat.id,"Номер карточки которую хотите удалить: ")
