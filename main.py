@@ -1,16 +1,51 @@
 import telebot
 from telebot import types
 from config import TOKEN
-from functions import *
+#from functions import *
+from itertools import groupby
 import sqlite3 as sq
 
 
 bot=telebot.TeleBot(TOKEN)
-question_for_add = ''
-answer_for_add = ''
 correct = 0
 stage = 'null' 
 my_message = 1
+
+def update():
+    global col_of_q
+    with sq.connect('cards.db') as con:
+        cur = con.cursor()
+        cur.execute("""SELECT question FROM cards""")
+        questions = cur.fetchall()
+        unique_questions = [el for el, _ in groupby(questions)]
+        col_of_q = len(unique_questions)
+        for i in range (1, col_of_q + 1):
+            q = (str(unique_questions[i-1])[2:-3])
+            #print(q)
+            cur.execute("""UPDATE cards SET number = ? WHERE question = ? """, (i, q))
+
+def add(question, answer):
+    with sq.connect('cards.db') as con:
+        cur = con.cursor()
+        cur.execute(f"""INSERT INTO cards (number, question, answer) VALUES (? , ? , ?)""", (col_of_q+1, question, answer))
+
+def quest(number):
+    global question
+    with sq.connect('cards.db') as con:
+        cur = con.cursor()
+        cur.execute(f"""SELECT question FROM cards WHERE number = {number}""")
+        question = cur.fetchall()
+        question = str(question[0])[2:-3]
+        print(question)
+
+def answ(number):
+    global r_answer
+    with sq.connect('cards.db') as con:
+        cur = con.cursor()
+        cur.execute(f"""SELECT answer FROM cards WHERE number = {number}""")
+        r_answer = cur.fetchall()
+        r_answer = str(r_answer[0])[2:-3]
+
 update()
 
 @bot.message_handler(commands=['start'])
@@ -29,26 +64,28 @@ def chek_text(message):
     global question_for_add
     global answer_for_add
     global answer
+    global r_answer
     global correct
     global col_of_q
     print(stage)
     if stage == 'check':
-        quest(1)
+        answ(1)
         answer = message.text
-        if answer == question:
+        if answer == r_answer:
             bot.send_message(message.chat.id,"Правильно")
             correct += 1
         else:
             bot.send_message(message.chat.id,"Не правильно")
-        with sq.connect('cards.db') as con:
-            cur = con.cursor()
-            cur.execute("""SELECT question FROM cards""")
-            questions = cur.fetchall()
-            unique_questions = [el for el, _ in groupby(questions)]
-            col_of_q = len(unique_questions)
+        
+        update()
+
+        quest(i)
+        bot.send_message(message.chat.id, f"Карточка номер {i}: {question}")
+        bot.send_message(message.chat.id,"Ваш ответ: ")
+    
         for i in range(2, col_of_q+1):
             quest(i)
-            bot.send_message(message.chat.id, f"Карточка номер {i}: {question[3:-4]}")
+            bot.send_message(message.chat.id, f"Карточка номер {i}: {question}")
             bot.send_message(message.chat.id,"Ваш ответ: ")
             answer = message.text
             if answer == question:
@@ -107,11 +144,9 @@ def chek_callback_data(callback):
         update()
         correct = 0
         stage = 'check'
-        with sq.connect('cards.db') as con:
-            cur = con.cursor()
-            cur.execute(f"""SELECT question FROM cards WHERE number = 1""")
-            question = cur.fetchall()
-        bot.send_message(callback.message.chat.id, f"Карточка номер 1: {question[3:-4]}")
+        quest(1)
+        bot.send_message(callback.message.chat.id, f"Карточка номер 1: {question}")
+        print(question)
         bot.send_message(callback.message.chat.id, "Ваш ответ: ")
 
     elif callback.data == "edit":

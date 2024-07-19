@@ -1,6 +1,12 @@
 import sqlite3 as sq
 from itertools import groupby
 
+question = []
+answer = ''
+question_for_add = ''
+answer_for_add = ''
+col_of_q = 0
+
 def update():
     global col_of_q
     with sq.connect('cards.db') as con:
@@ -11,6 +17,7 @@ def update():
         col_of_q = len(unique_questions)
         for i in range (1, col_of_q + 1):
             q = (str(unique_questions[i-1])[2:-3])
+            #print(q)
             cur.execute("""UPDATE cards SET number = ? WHERE question = ? """, (i, q))
 
 def add(question, answer):
@@ -24,6 +31,7 @@ def quest(number):
         cur = con.cursor()
         cur.execute(f"""SELECT question FROM cards WHERE number = {number}""")
         question = cur.fetchall()
+        print(question)
 
 def answ(number):
     global answer
