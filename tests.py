@@ -1,3 +1,4 @@
-from functions import *
+from main import answ, r_answer
 
-update()
+answ(1)
+print(r_answer)

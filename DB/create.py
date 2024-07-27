@@ -9,6 +9,7 @@ with sq.connect('cards.db') as con:
     cur.execute("""DROP TABLE IF EXISTS cards""") # удаление таблицы
 
     cur.execute("""CREATE TABLE IF NOT EXISTS cards(
+        user_id INTEGER,
         number INTERGER,
         question TEXT NOT NULL,
         answer TEXT NOT NULL
