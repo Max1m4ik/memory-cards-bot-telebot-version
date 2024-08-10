@@ -11,6 +11,7 @@ with sq.connect('cards.db') as con:
     cur.execute("""CREATE TABLE IF NOT EXISTS cards(
         user_id INTEGER,
         number INTERGER,
+        set_name TEXT,
         question TEXT NOT NULL,
         answer TEXT NOT NULL
     )""")
