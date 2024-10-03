@@ -34,17 +34,18 @@ def update():
 def update_sets():
     global col_of_set
     global sets
+    global user_id
     with sq.connect('sets.db') as con:
         cur = con.cursor()
-        print(user_id)
-        cur.execute("""SELECT set_name from sets WHERE user_id = ?""", (user_id))
+        print(f"user_id: {user_id}, type: {type(user_id)}")
+        cur.execute(f"SELECT set_name FROM sets WHERE user_id = {user_id}")
         set = cur.fetchall()
         sets = set
         print(set)
         unique_set = [el for el, _ in groupby(set)]
         sets = unique_set
-        print(unique_set ,'unique_set')
-        print(sets ,'sets')
+        print(unique_set, 'unique_set')
+        print(sets, 'sets')
         col_of_set = len(unique_set)
         print(unique_set)
 
@@ -102,6 +103,7 @@ def menu(message):
     btn3 = types.InlineKeyboardButton(text="Выход", callback_data="exit_to_set_menu")
     main_kb.add(btn1)
     main_kb.add(btn2)
+    main_kb.add(btn3)
     my_message = bot.send_message(message.chat.id, "Что вы хотите сделать? ", reply_markup=main_kb)
 
 def set_menu(message):
@@ -121,7 +123,8 @@ def start(message):
     user_id = message.from_user.id
     #update()
     update_sets()
-    if col_of_set >= 1: 
+    print(col_of_set)
+    if col_of_set + 1 > 1: 
         set_menu(message)
     else:
         add_kb = types.InlineKeyboardMarkup()
@@ -155,12 +158,15 @@ def chek_text(message):
         menu(message)
     
     elif stage == 'del_set':
-        if sets[int(message.text)-1] in sets:
+        if int(message.text) <= col_of_set:
             set_for_del = str(sets[int(message.text)-1])[2:-3]
+            with sq.connect('sets.db') as con:
+                cur = con.cursor()
+                cur.execute(f"""DELETE FROM sets WHERE set_name = ? AND user_id = ?""", (set_for_del, user_id))
+                sets.remove(sets[int(message.text)-1])
             with sq.connect('cards.db') as con:
                 cur = con.cursor()
                 cur.execute(f"""DELETE FROM cards WHERE set_name = ? AND user_id = ?""", (set_for_del, user_id))
-                sets.remove(sets[int(message.text)-1])
             bot.send_message(message.chat.id, "Набор успешно удален")
             start(message)
         else:
@@ -235,7 +241,7 @@ def chek_text(message):
         stage = 'null'
         update()
         bot.send_message(message.chat.id,"Карточка успешно удалена!")
-        start(message)
+        menu(message)
     
     elif stage == 'null':
         bot.send_message(message.chat.id,"Напишите /start чтобы начать")
@@ -256,15 +262,17 @@ def chek_callback_data(callback):
     global sets
     global user_id
     global text
+    global col_of_q
     user_id = callback.from_user.id
 
     update_sets()
 
     if callback.data == "choose_set":
-            bot.send_message(callback.message.chat.id,"Выберите набор:")
+            bot.send_message(callback.message.chat.id, "Выберите набор:")
             update_sets()
-            for i in range (1, col_of_set+1):
-                bot.send_message(callback.message.chat.id, f"{i} - {sets[i-1]}")
+            for i in range(1, col_of_set + 1):
+                set_name = sets[i-1][0]
+                bot.send_message(callback.message.chat.id, f"{i} - {set_name}")
             stage = 'choose'
     
     elif callback.data == "del_set":
@@ -273,8 +281,8 @@ def chek_callback_data(callback):
             del_set_kb.add(del_set_btn)
             bot.send_message(callback.message.chat.id,"Введите номер набора который хотите удалить или выйдете в меню", reply_markup=del_set_kb)
             for i in range (0, len(sets)):
-                text += f"{i+1} - {str(sets[i])[2:-3]}/n"
-            bot.send_message(callback.message.chat.id, text)
+                text = f"{i+1} - {str(sets[i])[2:-3]}"
+                bot.send_message(callback.message.chat.id, text)
             stage = 'del_set'
     
     elif callback.data == "add_set":
@@ -298,17 +306,22 @@ def chek_callback_data(callback):
             set_menu(callback.message)    
 
         elif callback.data == "check":
-            bot.send_message(callback.message.chat.id,"Вы решили проверить знания")
-            quest(1)
-            bot.send_message(callback.message.chat.id, f"Карточка номер 1: {question}")
-            bot.send_message(callback.message.chat.id, "Ваш ответ: ")
-            answ(1)
-            print (r_answer)
             update()
-            correct = 0
-            question_counter = 1
-            check_stage = 2
-            stage = 'check'
+            if col_of_q <= 1:
+                bot.send_message(callback.message.chat.id, "Добавте карточек в набор, их слишком мало (минимум 2)")
+                menu(callback.message)
+            else:
+                bot.send_message(callback.message.chat.id,"Вы решили проверить знания")
+                quest(1)
+                bot.send_message(callback.message.chat.id, f"Карточка номер 1: {question}")
+                bot.send_message(callback.message.chat.id, "Ваш ответ: ")
+                answ(1)
+                print (r_answer)
+                update()
+                correct = 0
+                question_counter = 1
+                check_stage = 2
+                stage = 'check'
 
         elif callback.data == "edit":
             edit_menu = types.InlineKeyboardMarkup()

@@ -4,3 +4,5 @@ cards.db
 Диаграмма.drawio
 sets.db
 tests.py
+test.db
+__pycache__/
