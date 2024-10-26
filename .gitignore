@@ -6,3 +6,5 @@ sets.db
 tests.py
 test.db
 __pycache__/
+intervals.db
+test.py

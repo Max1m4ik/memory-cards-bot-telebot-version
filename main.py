@@ -1,11 +1,17 @@
 import telebot
 from telebot import types
+from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 from config import TOKEN
 #from functions import *
 from itertools import groupby
 import sqlite3 as sq
+#from datetime import datetime
+#from UTC_LIST import utc_to_timezone
+import schedule
+import time
+import threading
 
-
+only_one = 0
 bot=telebot.TeleBot(TOKEN)
 correct = 0
 stage = 'null' 
@@ -15,6 +21,10 @@ question_counter = 1
 check_stage = 0 
 current_set = ('')
 text = ''
+reminder_active = False
+interval_minutes = 0
+reminder_set = ""
+choose_set_for = 0
 
 def update():
     global col_of_set
@@ -84,6 +94,7 @@ def quest(number):
             question = str(question[0])[2:-3]
     except IndexError:
         pass
+        
 def answ(number):
     try:
         global r_answer
@@ -116,6 +127,121 @@ def set_menu(message):
     set_menu_kb.add(btn3)
     bot.send_message(message.chat.id, "Выберите действие", reply_markup=set_menu_kb)
 
+def set_intervals_on(current_set, user_id, message):
+    global choose_set_for
+    choose_set_for = 1
+    update_sets()
+    if current_set not in sets:
+        choose_set_kb = types.InlineKeyboardMarkup()
+        choose_set_btn = types.InlineKeyboardButton(text="Выбрать набор", callback_data="choose_set")
+        choose_set_btn2 = types.InlineKeyboardButton(text="Выход", callback_data="exit_to_main")
+        choose_set_kb.add(choose_set_btn)
+        choose_set_kb.add(choose_set_btn2)
+        bot.send_message(message.chat.id, "Пожалуйста выберите набор ", reply_markup=choose_set_kb)
+    else:
+        with sq.connect('intervals.db') as con:
+            cur = con.cursor()
+            cur.execute(f"""DELETE FROM intervals WHERE user_id = ? AND set_name = ?""", (user_id, current_set[0]))
+            cur.execute(f"""INSERT OR REPLACE INTO intervals (user_id, set_name, value) VALUES (? , ? , ?)""", (user_id, current_set[0], 1))
+        bot.send_message(message.chat.id, "Отлично! Для начала напоминаний пройдите тестирование в этом наборе чтобы определить интервал повторения")
+        menu(message)
+        choose_set_for = 0
+
+def set_intervals_off(current_set, user_id, message):
+    global choose_set_for
+    choose_set_for = 2
+    update_sets()
+    if current_set not in sets:
+        choose_set_kb = types.InlineKeyboardMarkup()
+        choose_set_btn = types.InlineKeyboardButton(text="Выбрать набор", callback_data="choose_set")
+        choose_set_btn2 = types.InlineKeyboardButton(text="Выход", callback_data="exit_to_main")
+        choose_set_kb.add(choose_set_btn)
+        choose_set_kb.add(choose_set_btn2)
+        bot.send_message(message.chat.id, "Пожалуйста выберите набор ", reply_markup=choose_set_kb)
+    else:
+        with sq.connect('intervals.db') as con:
+            cur = con.cursor()
+            cur.execute(f"""DELETE FROM intervals WHERE user_id = ? AND set_name = ?""", (user_id, current_set[0]))
+            cur.execute(f"""INSERT OR REPLACE INTO intervals (user_id, set_name, value) VALUES (? , ? , ?)""", (user_id, current_set[0], 0))
+            bot.send_message(message.chat.id, "Напоминания для этого набора отключены")
+        choose_set_for = 0
+    
+    
+    
+def calculate_next_interval(correct_percentage):
+    # Пример интервалов на основе процента правильных ответов
+    if correct_percentage >= 90:
+        return 1  # 24 часа
+    elif correct_percentage >= 75:
+        return 2 # 12 часов
+    elif correct_percentage >= 50:
+        return 2   # 6 часов
+    else:
+        return 4  # 3 часа
+
+
+def send_reminder(chat_id, current_set):
+    global reminder_active
+    global reminder_set
+    
+    kb = types.InlineKeyboardMarkup()
+    btn1 = types.InlineKeyboardButton(text="Проверить знания", callback_data="check_from_reminder")
+    kb.add(btn1)
+    reminder_set = current_set
+    bot.send_message(chat_id, f"Пора повторить материал! В наборе {current_set[0]}", reply_markup=kb)
+    reminder_active = False
+
+def schedule_reminder(chat_id, correct_percentage):
+    global reminder_active
+    interval_minutes = calculate_next_interval(correct_percentage)
+    print(f"Следующие напоминание через {interval_minutes} часов")
+    reminder_active = True
+    #schedule.every(interval_minutes).minutes.do(send_reminder, chat_id=chat_id)
+    reminder_thread = threading.Thread(target=run_reminder, args=(chat_id, interval_minutes))
+    reminder_thread.start()
+    
+def run_reminder(chat_id, current_set):
+    global reminder_active  # Объявляем переменную как глобальную
+    global interval_minutes
+    while reminder_active:
+        schedule.every(interval_minutes).minutes.do(send_reminder, chat_id=chat_id, current_set=current_set)
+        x = 0
+        while reminder_active:
+            schedule.run_pending()
+            print(x)
+            x = x + 1
+            time.sleep(1)
+        
+def start_reminder_thread(chat_id, correct_percentage, current_set):
+    global reminder_active
+    global only_one
+    global interval_minutes
+    if only_one == 0:
+        interval_minutes = calculate_next_interval(correct_percentage)
+        print(f"Следующие напоминание через {interval_minutes} минут")
+        reminder_active = True
+        #schedule.every(interval_minutes).minutes.do(send_reminder, chat_id=chat_id)
+        reminder_thread = threading.Thread(target=run_reminder, args=(chat_id, current_set))
+        reminder_thread.start()
+        only_one += 1
+    else:
+        reminder_active = True
+        interval_minutes = calculate_next_interval(correct_percentage)
+        reminder_thread = threading.Thread(target=run_reminder, args=(chat_id, current_set))
+        reminder_thread.start()
+        print(f"Следующие напоминание через {interval_minutes} минут")
+        print("второй путь")
+        
+def edit_menu(message):
+    edit_menu = types.InlineKeyboardMarkup()
+    btn1 = types.InlineKeyboardButton(text="Добавить карточки", callback_data="add")
+    btn2 = types.InlineKeyboardButton(text="Удалить карточки", callback_data="delite")
+    btn3 = types.InlineKeyboardButton(text="Выход", callback_data="finish_editing")
+    edit_menu.add(btn1)
+    edit_menu.add(btn2)
+    edit_menu.add(btn3)
+    bot.send_message(chat_id = message.chat.id, text = "Выберите что вы будите делать: ", reply_markup=edit_menu)
+    
 @bot.message_handler(commands=['start'])
 def start(message):
     global user_id
@@ -132,6 +258,14 @@ def start(message):
         btn2 = types.InlineKeyboardButton(text="Выход", callback_data="exit_to_main")
         add_kb.add(btn1,btn2)
         bot.send_message(message.chat.id, "У вас не ни одного набора, создайте его", reply_markup=add_kb)
+        
+@bot.message_handler(commands=['reminder_on'])
+def start(message):
+    set_intervals_on(current_set, user_id, message)
+    
+@bot.message_handler(commands=['reminder_off'])
+def start(message):
+    set_intervals_off(current_set, user_id, message)
 
 @bot.message_handler(content_types=['text'])
 def chek_text(message):
@@ -149,9 +283,17 @@ def chek_text(message):
     global current_set
     #print(stage)
     user_id = message.from_user.id
+    global choose_set_for 
     if stage == 'choose':
-        menu(message)
         current_set = sets[int(message.text)-1]
+        if choose_set_for == 1:
+            set_intervals_on(current_set, user_id, message)
+        elif choose_set_for == 2:
+            set_intervals_off(current_set, user_id, message)
+        else:
+            menu(message)
+            
+        
     elif stage == 'add_set':
         add_set(message.text)
         bot.send_message(message.chat.id, "Хранилеще успешно созданно!")
@@ -209,9 +351,19 @@ def chek_text(message):
                     check_stage = 1
             
             elif check_stage == 3:
-                bot.send_message(message.chat.id,f"Правильных ответов: {correct} из {col_of_q}, ({correct / col_of_q * 100}%)")
+                correct_percentage = (correct / col_of_q) * 100
+                bot.send_message(message.chat.id,f"Правильных ответов: {correct} из {col_of_q}, ({correct_percentage}%)")
                 stage = 'null'
-
+                with sq.connect('intervals.db') as con:
+                    cur = con.cursor()
+                    cur.execute("SELECT value FROM intervals WHERE user_id = ? AND set_name = ?", (user_id, current_set[0]))
+                    reminder_active = cur.fetchone()
+                
+                if reminder_active[0] == 1:
+                    start_reminder_thread(message.chat.id, correct_percentage, current_set)
+                    interval_minutes = calculate_next_interval(correct_percentage)
+                    #bot.send_message(message.chat.id, f"Следующие напоминание через {interval_minutes//60} часов")
+                    
                 menu(message)
 
             else:
@@ -228,8 +380,12 @@ def chek_text(message):
         add(question_for_add, answer_for_add)
         bot.send_message(message.chat.id,"Карточка успешно добавлена!")
         #update()
-        menu(message)
+        #menu(message)
+        #callback_data = "edit"
         stage = 'null'
+        
+        edit_menu(message)
+        
     
     elif stage == 'del':
         number_question_for_del = message.text
@@ -241,7 +397,7 @@ def chek_text(message):
         stage = 'null'
         update()
         bot.send_message(message.chat.id,"Карточка успешно удалена!")
-        menu(message)
+        edit_menu(message)
     
     elif stage == 'null':
         bot.send_message(message.chat.id,"Напишите /start чтобы начать")
@@ -263,6 +419,7 @@ def chek_callback_data(callback):
     global user_id
     global text
     global col_of_q
+    global current_set
     user_id = callback.from_user.id
 
     update_sets()
@@ -303,8 +460,66 @@ def chek_callback_data(callback):
             start(callback.message)
         
         elif callback.data == 'exit_to_set_menu':
-            set_menu(callback.message)    
+            set_menu(callback.message)  
+            
+        elif callback.data == "finish_editing":
+            update()
+            print(col_of_q)
+            if col_of_q <= 1:
+                low_exit_kb = types.InlineKeyboardMarkup()
+                lbtn1 = types.InlineKeyboardButton(text="Выйти в меню", callback_data="exit_to_cards_menu")
+                lbtn2 = types.InlineKeyboardButton(text="Вернуться к редактированию", callback_data="edit")
+                low_exit_kb.add(lbtn1)
+                low_exit_kb.add(lbtn2)
+                bot.send_message(callback.message.chat.id, "Вы завершили редактирование но у вас слишком мало (минимум 2) вы можете выйти в меню или вернуться к редактированию", reply_markup=low_exit_kb)
+            else:
+                with sq.connect('intervals.db') as con:
+                    cur = con.cursor()
+                    cur.execute(f"SELECT value FROM intervals WHERE user_id = ? AND set_name = ?", (user_id, current_set[0]))
+                    reminder_active = cur.fetchone()
+                    
+                if reminder_active[0] == 1:
+                    menu(callback.message)
+                else:
+                    repeat_kb = types.InlineKeyboardMarkup()
+                    btn1 = types.InlineKeyboardButton(text="Выйти в меню", callback_data="exit_to_cards_menu")
+                    btn2 = types.InlineKeyboardButton(text="Начать отсчёт", callback_data="time_start")
+                    repeat_kb.add(btn1)
+                    repeat_kb.add(btn2)
+                    bot.send_message(callback.message.chat.id, "Похоже вы завершили редактирование, для более эффективного запоминания информации вы можете начать отсчёт времени и бот будет сообщать вам когда стоит проверить знания или вы просто хотите выйти в меню?", reply_markup=repeat_kb)
 
+        elif callback.data == "exit_to_cards_menu":
+            menu(callback.message)
+            
+        elif callback.data == "time_start":
+            #global current_set
+            
+            set_intervals_on(current_set, user_id, callback.message)
+            
+            bot.send_message(callback.message.chat.id, "Отлично! Для начала напоминаний пройдите тестирование в этом наборе чтобы определить интервал повторения")
+            menu(callback.message)
+            
+        elif callback.data == "check_from_reminder":
+            global reminder_set
+            current_set = reminder_set
+            update()
+            if col_of_q <= 1:
+                bot.send_message(callback.message.chat.id, "Добавте карточек в набор, их слишком мало (минимум 2)")
+                menu(callback.message)
+            else:
+                bot.send_message(callback.message.chat.id,"Вы решили проверить знания")
+                quest(1)
+                bot.send_message(callback.message.chat.id, f"Карточка номер 1: {question}")
+                bot.send_message(callback.message.chat.id, "Ваш ответ: ")
+                answ(1)
+                print (r_answer)
+                update()
+                correct = 0
+                question_counter = 1
+                check_stage = 2
+                stage = 'check'
+
+        
         elif callback.data == "check":
             update()
             if col_of_q <= 1:
@@ -327,8 +542,10 @@ def chek_callback_data(callback):
             edit_menu = types.InlineKeyboardMarkup()
             btn1 = types.InlineKeyboardButton(text="Добавить карточки", callback_data="add")
             btn2 = types.InlineKeyboardButton(text="Удалить карточки", callback_data="delite")
+            btn3 = types.InlineKeyboardButton(text="Выход", callback_data="finish_editing")
             edit_menu.add(btn1)
             edit_menu.add(btn2)
+            edit_menu.add(btn3)
             bot.send_message(chat_id = callback.message.chat.id, text = "Выберите что вы будите делать: ", reply_markup=edit_menu)
 
         elif callback.data == "add":
@@ -336,6 +553,7 @@ def chek_callback_data(callback):
             #update()
             bot.send_message(callback.message.chat.id,"Вопрос:")
             stage = 'add1'
+            
         elif callback.data == "delite":
             bot.send_message(callback.message.chat.id,"Вы решили удалить карточки")
             update()
